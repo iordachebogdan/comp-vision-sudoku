@@ -2,3 +2,7 @@
 .vscode/
 .ipynb_checkpoints/
 __pycache__/
+
+evaluation/
+test/
+train/
