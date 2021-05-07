@@ -3,7 +3,7 @@ import os
 from tqdm import tqdm
 
 from sudoku.generic_utils import load_images
-from sudoku.tasks import make_prediction_task1
+from sudoku.tasks import make_prediction_task1, make_prediction_task2
 
 parser = argparse.ArgumentParser()
 parser.add_argument("task", help="which task to solve (1, 2 or 3)", type=int)
@@ -34,6 +34,16 @@ def solve_task1(all_images, all_filenames, output_dir):
             print(f"Failed on {filename}: {ex}")
 
 
+def solve_task2(all_images, all_filenames, output_dir):
+    for img, filename in tqdm(zip(all_images, all_filenames), total=len(all_images)):
+        try:
+            predicted = make_prediction_task2(img.copy())
+            with open(os.path.join(output_dir, f"{filename}_predicted.txt"), "w") as f:
+                f.write(predicted)
+        except Exception as ex:
+            print(f"Failed on {filename}: {ex}")
+
+
 def main():
     args = parser.parse_args()
     if args.task not in [1, 2, 3]:
@@ -52,10 +62,10 @@ def main():
     )
     if args.task == 1:
         solve_task1(all_images, all_filenames, args.output_dir)
-    # elif args.task == 2:
-    #     solve_task2(all_images, all_filenames)
+    elif args.task == 2:
+        solve_task2(all_images, all_filenames, args.output_dir)
     # else:
-    #     solve_task3(all_images, all_filenames)
+    #     solve_task3(all_images, all_filenames, args.output_dir)
 
 
 if __name__ == "__main__":

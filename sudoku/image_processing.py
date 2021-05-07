@@ -2,6 +2,7 @@ import cv2 as cv
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.spatial.distance as distance
+from sklearn.cluster import KMeans
 
 
 def resize_image(image, d_width, inter=cv.INTER_LANCZOS4):
@@ -216,3 +217,228 @@ def classify_boxes(img, classifier, debug=False, margin_pct=0.20):
         plt.close(fig)
 
     return return_string[:-1]
+
+
+def has_color(img):
+    """Check if given image contains a colored jigsaw sudoku. This is decided
+    based on the mean saturation of the image. A higher saturation means more
+    vibrant colors"""
+    hsv = cv.cvtColor(img, cv.COLOR_BGR2HSV)
+    return np.mean(hsv[:, :, 1]) > 15
+
+
+class CellBorders:
+    """Store for a given sudoku cell if there are borders of a jigsaw region on
+    either of its four sides"""
+
+    def __init__(self, up=False, right=False, down=False, left=False):
+        self.up = up
+        self.right = right
+        self.down = down
+        self.left = left
+
+    def __str__(self):
+        res = ""
+        if self.up:
+            res += "U"
+        if self.right:
+            res += "R"
+        if self.down:
+            res += "D"
+        if self.left:
+            res += "L"
+        if not res:
+            res = "none"
+        return res
+
+    def __repr__(self):
+        return str(self)
+
+
+def classify_borders(binary_img, classifier, debug=False, margin_pct=0.10):
+    """Given the warped binary image of the jigsaw sudoku square, split it equally
+    into 81 cells and detect which ones determine the borders of the jigsaw regions.
+
+    Parameters:
+        binary_img (ndarray): warped binary image of a sudoku square
+        classifier (CompletedBoxClassifier): classifier for jigsaw borders
+        debug (bool): debugging flag
+        margin_pct (float): for each cell crop the margins based on this percentage,
+            these margins are used for determining if a jigsaw border is placed
+            on that side of the cell
+
+    Returns:
+        borders (list[list[CellBorders]]): matrix showing where the borders of the
+            jigsaw regions are placed
+    """
+    box_len = int(binary_img.shape[0] / 9)
+
+    borders = [[CellBorders() for i in range(9)] for j in range(9)]
+
+    for i in range(9):
+        for j in range(9):
+            box = binary_img[
+                i * box_len : (i + 1) * box_len - 1, j * box_len : (j + 1) * box_len - 1
+            ].copy()
+            margin = int(box_len * margin_pct)
+
+            # up
+            box_margin = box[:margin, :]
+            predicted = classifier(box_margin)
+            if predicted:
+                borders[i][j].up = True
+                if i > 0:
+                    borders[i - 1][j].down = True
+
+            # right
+            box_margin = box[:, -margin:]
+            predicted = classifier(box_margin)
+            if predicted:
+                borders[i][j].right = True
+                if j < 8:
+                    borders[i][j + 1].left = True
+
+            # down
+            box_margin = box[-margin:, :]
+            predicted = classifier(box_margin)
+            if predicted:
+                borders[i][j].down = True
+                if i < 8:
+                    borders[i + 1][j].up = True
+
+            # left
+            box_margin = box[:, :margin]
+            predicted = classifier(box_margin)
+            if predicted:
+                borders[i][j].left = True
+                if j > 0:
+                    borders[i][j - 1].right = True
+
+    if debug:
+        print("\n".join(["\t".join([str(x) for x in line]) for line in borders]))
+
+    return borders
+
+
+def fill_regions(borders):
+    """Given the configuration of the jigsaw borders apply a recursive fill
+    algorithm that determines and labels the jigsaw regions.
+
+    Parameters:
+        borders (list[list[CellBorders]]): configuration of the jigsaw borders
+
+    Returns:
+        regions_str (str): the region-labels of the cells (string representation)
+    """
+    zones = [[0] * 9 for _ in range(9)]
+
+    def recursive_fill(i, j, val):
+        if zones[i][j] != 0:
+            return
+        zones[i][j] = val
+        if i > 0 and not borders[i][j].up:
+            recursive_fill(i - 1, j, val)
+        if i < 8 and not borders[i][j].down:
+            recursive_fill(i + 1, j, val)
+        if j > 0 and not borders[i][j].left:
+            recursive_fill(i, j - 1, val)
+        if j < 8 and not borders[i][j].right:
+            recursive_fill(i, j + 1, val)
+
+    curr = 0
+    for i in range(9):
+        for j in range(9):
+            if zones[i][j] == 0:
+                # found a new region
+                curr += 1
+                recursive_fill(i, j, curr)
+
+    return "\n".join(["".join([str(x) for x in line]) for line in zones])
+
+
+def find_colored_zones(img, binary_img, num_colors=3, debug=False, margin_pct=0.15):
+    """Given the warped binary image of the jigsaw sudoku square, find the jigsaw
+    regions based on the color of the cells. The color of a cell is approximated
+    to the mean value of the pixels in that cell that are not part of a digit or
+    the border of the cell (in order to ignore those we also use the binary
+    representation of the sudoku square - we ignore the positions with white pixels)
+
+    Parameters:
+        img (ndarray): colored sudoku board
+        binary_img (ndarray): binary representation of the board
+        num_colors (int): number of distinct colors used for delimiting regions
+        debug (bool): debugging flag
+        margin_pct (float): for each cell crop the margins based on this percentage
+
+    Returns:
+        regions_str (str): the region-labels of the cells (string representation)
+    """
+    hsv = cv.cvtColor(img, cv.COLOR_BGR2HSV)
+    box_len = int(img.shape[0] / 9)
+    colors = []
+
+    fig = plt.figure(figsize=(9, 9))
+    for i in range(9):
+        for j in range(9):
+            top = i * box_len
+            bottom = (i + 1) * box_len
+            left = j * box_len
+            right = (j + 1) * box_len
+
+            mean_color = np.array([0.0, 0.0, 0.0])
+            mean_hue = np.array([0.0])
+            cnt = 0
+            for y in range(top, bottom):
+                for x in range(left, right):
+                    if binary_img[y, x] == 0:
+                        mean_color += img[y, x]
+                        mean_hue += hsv[y, x, 0]
+                        cnt += 1
+            mean_color = np.array(mean_color / cnt, dtype=np.uint8)
+            mean_hue = mean_hue / cnt
+
+            fig.add_subplot(9, 9, i * 9 + j + 1)
+            plt.imshow([[mean_color[[2, 1, 0]]] * box_len] * box_len)
+            plt.axis("off")
+
+            # use the mean hue of the cell for color-based clustering of the cells
+            colors.append(mean_hue)
+
+    # use KMeans clustering to cluster the cells based on color
+    clusters = list(KMeans(n_clusters=num_colors, random_state=42).fit_predict(colors))
+    if debug:
+        print(clusters)
+    # set the color cluster for each cell
+    zones = [[0] * 9 for _ in range(9)]
+    for i in range(9):
+        for j in range(9):
+            zones[i][j] = clusters.pop(0) + 1
+
+    def fill_conex_region(i, j, val):
+        """Recursive fill for labelling conex regions with the same color"""
+        color = zones[i][j]
+        zones[i][j] = -val
+        for d_i, d_j in [[0, 1], [0, -1], [1, 0], [-1, 0]]:
+            ni, nj = i + d_i, j + d_j
+            if 0 > ni or ni > 8 or 0 > nj or nj > 8 or zones[ni][nj] != color:
+                continue
+            fill_conex_region(ni, nj, val)
+
+    # determine the conex regions with same color
+    curr = 0
+    for i in range(9):
+        for j in range(9):
+            if zones[i][j] < 0:
+                continue
+            curr += 1
+            fill_conex_region(i, j, curr)
+
+    ret_string = "\n".join(["".join([str(-x) for x in line]) for line in zones])
+    if debug:
+        plt.show()
+        print(ret_string)
+    else:
+        fig.clear()
+        plt.close(fig)
+
+    return ret_string
