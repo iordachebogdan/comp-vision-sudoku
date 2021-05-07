@@ -1,6 +1,7 @@
 import argparse
-import cv2 as cv
 import os
+
+import cv2 as cv
 from tqdm import tqdm
 
 from sudoku.generic_utils import load_images
@@ -84,7 +85,7 @@ def main():
         print("Invalid task number")
         return
     if args.task == 3 and (not args.template_path or not args.digit_db_path):
-        print("You must specify the path to the sudoku cube template")
+        print("You must specify the path to the sudoku cube template and digits db")
         return
     if not os.path.isdir(args.input_dir):
         print("Invalid input directory")

@@ -1,8 +1,9 @@
+import os
+import re
+
 import cv2 as cv
 import matplotlib.pyplot as plt
 import numpy as np
-import os
-import re
 import sklearn.model_selection as model_selection
 
 from sudoku.image_processing import resize_image

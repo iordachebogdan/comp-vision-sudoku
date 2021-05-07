@@ -177,7 +177,7 @@ def classify_boxes(img, classifier, debug=False, margin_pct=0.20):
             in order to ignore the borders of the sudoku grid
 
     Returns:
-        parsed_board (str): the parsing of the sudoku boards showing which cells
+        parsed_board (str): the parsing of the sudoku board showing which cells
             are completed
     """
 
@@ -357,7 +357,7 @@ def fill_regions(borders):
 
 
 def find_colored_zones(img, binary_img, num_colors=3, debug=False, margin_pct=0.15):
-    """Given the warped binary image of the jigsaw sudoku square, find the jigsaw
+    """Given the warped colored image of the jigsaw sudoku square, find the jigsaw
     regions based on the color of the cells. The color of a cell is approximated
     to the mean value of the pixels in that cell that are not part of a digit or
     the border of the cell (in order to ignore those we also use the binary
@@ -449,7 +449,7 @@ def get_digit_cell(img, row, col, margin_pct=0.15):
     and column. Also crop the margins of that cell.
 
     Parameters:
-        img (ndarray): image of sudoku sqare
+        img (ndarray): image of sudoku square
         row (int): row of the returned cell (0 indexed)
         col (int): column of the returned cell (0 indexed)
         margin_pct (float): percentage of margin to be cropped
@@ -493,8 +493,8 @@ def count_difference(img1, img2, delta_x, delta_y):
 
 
 def find_best_match(img, template, max_range=4):
-    """Given an image and a template, find the offset that minimizes the number
-    of mismatches between the two images. The offsets are searched in the
+    """Given a binary image and a template, find the offset that minimizes the
+    number of mismatches between the two images. The offsets are searched in the
     [-max_range, max_range] interval.
 
     Returns the minimum number of mismatches computed.

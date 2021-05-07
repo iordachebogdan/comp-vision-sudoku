@@ -1,24 +1,24 @@
 import cv2 as cv
 import matplotlib.pyplot as plt
 
+from sudoku.generic_utils import show_image_pyplot
 from sudoku.image_processing import (
-    preprocess_binary_image,
+    CompletedBoxClassifier,
+    classify_borders,
+    classify_boxes,
+    dilate_image,
+    fill_regions,
+    find_best_template,
+    find_colored_zones,
     find_largest_polygon,
     find_largest_polygons,
-    dilate_image,
     get_corners,
-    warp_image,
-    classify_boxes,
-    CompletedBoxClassifier,
-    remove_light_grays,
-    classify_borders,
-    fill_regions,
-    find_colored_zones,
-    has_color,
-    find_best_template,
     get_digit_cell,
+    has_color,
+    preprocess_binary_image,
+    remove_light_grays,
+    warp_image,
 )
-from sudoku.generic_utils import show_image_pyplot
 
 
 def make_prediction_task1(img, debug=False):
@@ -120,7 +120,7 @@ def make_prediction_task2_gray(warped, debug=False):
     gray_warped = cv.cvtColor(warped, cv.COLOR_BGR2GRAY)
     predicted_digits = classify_boxes(gray_warped, digit_classifier, debug=debug)
 
-    # determin the borders on the side of each cell, here we look at the binary image
+    # determine the borders on the side of each cell, here we look at the binary image
     # and determine the existence of a border based on the density of white pixels
     border_classifier = CompletedBoxClassifier(thresh=100, mode="mean")
     borders = classify_borders(
@@ -176,7 +176,7 @@ def make_prediction_task2(img, debug=False):
         debug (bool): debugging flag
 
     Returns:
-        parsed_board (str): the parsing of the sudoku board based on the task 1
+        parsed_board (str): the parsing of the sudoku board based on the task 2
             description
     """
     if debug:
@@ -213,7 +213,7 @@ def make_prediction_task2(img, debug=False):
 
 def find_order_of_boards(parsed_boards):
     """Given the parsings of three completed sudokus (the faces of a sudoku cube)
-    return the indexes of the boards for the top, front and right faces of the cube
+    return the indices of the boards for the top, front and right faces of the cube,
     respectively
     """
     for top in range(3):
@@ -254,7 +254,7 @@ def make_prediction_task3(img, templates, debug=False):
 
     Returns:
         res_str, faces ( (str, list) ): the parsing of the faces as specified in the
-            task description and the list of faces in the top, front and right order
+            task 3 description and the list of faces in the top, front and right order
     """
     preprocessed_img = preprocess_binary_image(img)
     if debug:
@@ -300,7 +300,7 @@ def make_prediction_task3(img, templates, debug=False):
 
         parsed_boards.append(res_str)
 
-    # find the order of the boards and compute the rezulting string
+    # find the order of the boards and compute the resulting string
     top, front, right = find_order_of_boards(parsed_boards)
     res_str = parsed_boards[top] + "\n\n"
     for i in range(9):
