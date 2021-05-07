@@ -442,3 +442,141 @@ def find_colored_zones(img, binary_img, num_colors=3, debug=False, margin_pct=0.
         plt.close(fig)
 
     return ret_string
+
+
+def get_digit_cell(img, row, col, margin_pct=0.15):
+    """For a given sudoku square, return the cropped cell at the specified row
+    and column. Also crop the margins of that cell.
+
+    Parameters:
+        img (ndarray): image of sudoku sqare
+        row (int): row of the returned cell (0 indexed)
+        col (int): column of the returned cell (0 indexed)
+        margin_pct (float): percentage of margin to be cropped
+
+    Returns:
+        cell (ndarray): the cropped cell
+    """
+    box_len = int(img.shape[0] / 9)
+    margin = int(box_len * margin_pct)
+    box = img[
+        row * box_len : (row + 1) * box_len, col * box_len : (col + 1) * box_len
+    ].copy()
+    return box[margin:-margin, margin:-margin]
+
+
+def count_difference(img1, img2, delta_x, delta_y):
+    """Given two binary images count how many pixels do not match (considering
+    an offset given for the first image).
+
+    Parameters:
+        img1 (ndarray): first binary image
+        img2 (ndarray): second binary image
+        delta_x (int): offset on the OX axis for the first image (in pixels)
+        delta_y (int): offset on the OY axis for the first image (in pixels)
+
+    Returns:
+        cnt (int): number of mismatches
+    """
+    cnt = 0
+    for y in range(img1.shape[0]):
+        for x in range(img1.shape[1]):
+            nx = x + delta_x
+            ny = y + delta_y
+            if 0 > nx or nx >= img2.shape[1] or 0 > ny or ny >= img2.shape[0]:
+                if img1[y, x] == 255:
+                    cnt += 1
+                continue
+            if img1[y, x] != img2[ny, nx]:
+                cnt += 1
+    return cnt
+
+
+def find_best_match(img, template, max_range=4):
+    """Given an image and a template, find the offset that minimizes the number
+    of mismatches between the two images. The offsets are searched in the
+    [-max_range, max_range] interval.
+
+    Returns the minimum number of mismatches computed.
+    """
+    best_cnt = float("inf")
+    for delta_x in range(-max_range, max_range + 1):
+        for delta_y in range(-max_range, max_range + 1):
+            cnt = count_difference(img, template, delta_x, delta_y)
+            best_cnt = min(best_cnt, cnt)
+    return best_cnt
+
+
+def find_best_template(img, templates, max_range=4):
+    """Given an image and a set of templates, find the best matching template"""
+    best_cnt = float("inf")
+    best_template = None
+    for i, template in enumerate(templates):
+        cnt = find_best_match(img, template, max_range)
+        if cnt < best_cnt:
+            best_cnt = cnt
+            best_template = i
+    return best_template
+
+
+def find_largest_polygons(binary_img, num=3):
+    """Returns the `num` largest polygons (contours), based on area,
+    found in the given binary image
+    """
+    polygons, _ = cv.findContours(binary_img, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+    polygons = sorted(polygons, key=lambda p: -cv.contourArea(p))
+    return polygons[:num]
+
+
+def warp_faces_on_template(template, top, front, right):
+    """Given the image of the template cube, warp the three sudokus on the
+    corresponding faces
+
+    The corners of the cube are considered constant (same template).
+    """
+    A = [5, 156]
+    B = [297, 236]
+    C = [297, 540]
+    D = [3, 463]
+    E = [274, 3]
+    F = [566, 82]
+    G = [566, 387]
+
+    template = template.copy()
+
+    # height and width of the faces
+    h, w = top.shape[:2]
+    face_pts = np.array([[0.0, 0.0], [w, 0.0], [w, h], [0.0, h]])
+
+    def warp_face(template, template_corners, face):
+        """Warp the given face on top of the template in the quad described by
+        the four `template_corners`
+        """
+        temp_pts = np.array(template_corners)
+        # find the homography matrix for this transformation
+        mat, _ = cv.findHomography(face_pts, temp_pts, cv.RANSAC, 5.0)
+        # warp the face into the given shape inside an image with the same dimensions
+        # as the template
+        temp_warped = cv.warpPerspective(
+            face, mat, (template.shape[1], template.shape[0])
+        )
+
+        # build a mask corresponding to the pixels where the warped sudoku will
+        # be pasted
+        mask = np.zeros(template.shape, dtype=np.uint8)
+        cv.fillConvexPoly(mask, temp_pts, 255)
+        mask = cv.bitwise_not(mask)
+
+        # paste the warped sudoku on top of the template
+        masked_template = cv.bitwise_and(template, mask)
+        template = cv.bitwise_or(temp_warped, masked_template)
+        return template
+
+    # top
+    template = warp_face(template, [E, F, B, A], top)
+    # front
+    template = warp_face(template, [A, B, C, D], front)
+    # right
+    template = warp_face(template, [B, F, G, C], right)
+
+    return template

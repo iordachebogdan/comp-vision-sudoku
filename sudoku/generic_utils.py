@@ -24,13 +24,14 @@ def show_image_pyplot(image):
     plt.show()
 
 
-def load_images(input_dir, resize=None):
+def load_images(input_dir, resize=None, grayscale=False):
     """Load images from input directory. It assumes that the filenames of the
     images are {number}.jpg
 
     Parameters:
         input_dir (str): path to input directory
         resize (int, optional): resize images to specified width
+        grayscale (bool): load images as grayscale
 
     Returns:
         (images, filenames) (list, list): loaded images and their corresponding
@@ -48,7 +49,11 @@ def load_images(input_dir, resize=None):
     filenames = sorted(filenames, key=lambda x: int(x))
 
     all_images = [
-        cv.imread(os.path.join(input_dir, f"{filename}.jpg")) for filename in filenames
+        cv.imread(
+            os.path.join(input_dir, f"{filename}.jpg"),
+            cv.IMREAD_GRAYSCALE if grayscale else cv.IMREAD_COLOR,
+        )
+        for filename in filenames
     ]
     if resize is not None:
         all_images = [resize_image(image, resize) for image in all_images]

@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from sudoku.image_processing import (
     preprocess_binary_image,
     find_largest_polygon,
+    find_largest_polygons,
     dilate_image,
     get_corners,
     warp_image,
@@ -14,6 +15,8 @@ from sudoku.image_processing import (
     fill_regions,
     find_colored_zones,
     has_color,
+    find_best_template,
+    get_digit_cell,
 )
 from sudoku.generic_utils import show_image_pyplot
 
@@ -206,3 +209,107 @@ def make_prediction_task2(img, debug=False):
         return make_prediction_task2_color(warped, debug=debug)
     else:
         return make_prediction_task2_gray(warped, debug=debug)
+
+
+def find_order_of_boards(parsed_boards):
+    """Given the parsings of three completed sudokus (the faces of a sudoku cube)
+    return the indexes of the boards for the top, front and right faces of the cube
+    respectively
+    """
+    for top in range(3):
+        for front in range(3):
+            if (
+                top == front
+                or parsed_boards[top].split("\n")[-1]
+                != parsed_boards[front].split("\n")[0]
+            ):
+                continue
+            for right in range(3):
+                if right == top or right == front:
+                    continue
+                ok = True
+                for i in range(9):
+                    ok &= (
+                        parsed_boards[top].split("\n")[i][-1]
+                        == parsed_boards[right].split("\n")[0][8 - i]
+                    )
+                    ok &= (
+                        parsed_boards[front].split("\n")[i][-1]
+                        == parsed_boards[right].split("\n")[i][0]
+                    )
+                if ok:
+                    return top, front, right
+    return 0, 1, 2
+
+
+def make_prediction_task3(img, templates, debug=False):
+    """For a given image of three completed sudokus (faces of a sudoku cube), parse
+    the contents of the boards and return them in the order given by the top, front
+    and right faces of the cube, respectively.
+
+    Parameters:
+        img (ndarray): image of three completed sudokus
+        templates (list): list of 9 templates for each of the 9 possible digits
+        debug (bool): debugging flag
+
+    Returns:
+        res_str, faces ( (str, list) ): the parsing of the faces as specified in the
+            task description and the list of faces in the top, front and right order
+    """
+    preprocessed_img = preprocess_binary_image(img)
+    if debug:
+        show_image_pyplot(preprocessed_img)
+
+    # find the three largest contours (the three sudoku boards)
+    found_contour_img = img.copy()
+    warped_imgs = []
+    for contour in find_largest_polygons(preprocessed_img, num=3):
+        found_contour_img = cv.drawContours(
+            found_contour_img, [contour], 0, (0, 255, 0), 3
+        )
+        tr, tl, bl, br = get_corners(contour)
+        warped_imgs.append(warp_image(img, corners=(tr, tl, bl, br), side_len=180))
+
+    if debug:
+        show_image_pyplot(found_contour_img)
+
+    parsed_boards = []
+    for warped in warped_imgs:
+        # for parsing a board, we firstly binarize and dilate the warped square
+        applied_blur = cv.GaussianBlur(warped, (3, 3), 0)
+        thresholded = cv.adaptiveThreshold(
+            applied_blur, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 3, 2
+        )
+        inverted = cv.bitwise_not(thresholded)
+        warped_binary = dilate_image(inverted, 2)
+
+        # the digits in each cell are classified by finding the best match among
+        # the 9 templates
+        res_str = ""
+        for i in range(9):
+            for j in range(9):
+                cell = get_digit_cell(warped_binary, i, j)
+                digit = find_best_template(cell, templates) + 1
+                res_str += str(digit)
+            res_str += "\n"
+        res_str = res_str[:-1]
+
+        if debug:
+            show_image_pyplot(warped)
+            print(res_str)
+
+        parsed_boards.append(res_str)
+
+    # find the order of the boards and compute the rezulting string
+    top, front, right = find_order_of_boards(parsed_boards)
+    res_str = parsed_boards[top] + "\n\n"
+    for i in range(9):
+        res_str += (
+            parsed_boards[front].split("\n")[i]
+            + " "
+            + parsed_boards[right].split("\n")[i]
+            + "\n"
+        )
+    res_str = res_str[:-1]
+
+    return res_str, [warped_imgs[top], warped_imgs[front], warped_imgs[right]]
