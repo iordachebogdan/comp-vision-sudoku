@@ -153,7 +153,7 @@ def make_prediction_task2_color(warped, debug=False):
         show_image_pyplot(binary_warped)
 
     # classify which cells contain digits
-    digit_classifier = CompletedBoxClassifier(thresh=600, mode="var")
+    digit_classifier = CompletedBoxClassifier(thresh=500, mode="var")
     gray_warped = cv.cvtColor(warped, cv.COLOR_BGR2GRAY)
     predicted_digits = classify_boxes(gray_warped, digit_classifier, debug=debug)
 
