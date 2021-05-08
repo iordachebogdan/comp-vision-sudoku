@@ -35,27 +35,29 @@ parser.add_argument(
 )
 
 
-def solve_task1(all_images, all_filenames, output_dir):
+def solve_task1(all_images, all_filenames, output_dir, debug):
     for img, filename in tqdm(zip(all_images, all_filenames), total=len(all_images)):
         try:
-            predicted = make_prediction_task1(img.copy())
+            predicted = make_prediction_task1(img.copy(), debug=debug)
             with open(os.path.join(output_dir, f"{filename}_predicted.txt"), "w") as f:
                 f.write(predicted)
         except Exception as ex:
             print(f"Failed on {filename}: {ex}")
 
 
-def solve_task2(all_images, all_filenames, output_dir):
+def solve_task2(all_images, all_filenames, output_dir, debug):
     for img, filename in tqdm(zip(all_images, all_filenames), total=len(all_images)):
         try:
-            predicted = make_prediction_task2(img.copy())
+            predicted = make_prediction_task2(img.copy(), debug=debug)
             with open(os.path.join(output_dir, f"{filename}_predicted.txt"), "w") as f:
                 f.write(predicted)
         except Exception as ex:
             print(f"Failed on {filename}: {ex}")
 
 
-def solve_task3(all_images, all_filenames, output_dir, template_path, digit_db_path):
+def solve_task3(
+    all_images, all_filenames, output_dir, template_path, digit_db_path, debug
+):
     # load the digit templates
     templates = []
     for i in range(1, 10):
@@ -68,7 +70,7 @@ def solve_task3(all_images, all_filenames, output_dir, template_path, digit_db_p
 
     for img, filename in tqdm(zip(all_images, all_filenames), total=len(all_images)):
         try:
-            predicted, faces = make_prediction_task3(img.copy(), templates)
+            predicted, faces = make_prediction_task3(img.copy(), templates, debug=debug)
             with open(os.path.join(output_dir, f"{filename}_predicted.txt"), "w") as f:
                 f.write(predicted)
 
@@ -98,9 +100,9 @@ def main():
         grayscale=(args.task == 3),
     )
     if args.task == 1:
-        solve_task1(all_images, all_filenames, args.output_dir)
+        solve_task1(all_images, all_filenames, args.output_dir, args.debug)
     elif args.task == 2:
-        solve_task2(all_images, all_filenames, args.output_dir)
+        solve_task2(all_images, all_filenames, args.output_dir, args.debug)
     else:
         solve_task3(
             all_images,
@@ -108,6 +110,7 @@ def main():
             args.output_dir,
             args.template_path,
             args.digit_db_path,
+            args.debug,
         )
 
 
